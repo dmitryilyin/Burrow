@@ -165,9 +165,9 @@ func (hc *Coordinator) handlePrometheusMetrics(writer http.ResponseWriter, reque
 			responseConsumerGroupStatus := <-requestConsumerGroupStatus.Reply
 
 			// skip the consumer group if the data have not been fully gathered
-			if responseConsumerGroupStatus.Complete < 1.0 {
-				continue
-			}
+			// if responseConsumerGroupStatus.Complete < 1.0 {
+			//	continue
+			// }
 
 			consumerGroupStatusLabelValue := responseConsumerGroupStatus.Status.String()
 
@@ -213,9 +213,9 @@ func (hc *Coordinator) handlePrometheusMetrics(writer http.ResponseWriter, reque
 			for _, partitionStatus := range responseConsumerGroupStatus.Partitions {
 
 				// skip the consumer group partition if the data have not been fully gathered
-				if partitionStatus.Complete < 1.0 {
-					continue
-				}
+				// if partitionStatus.Complete < 1.0 {
+				//	continue
+				// }
 				
 				topicLabelValue := partitionStatus.Topic
 				partitionLabelValue := strconv.Itoa(int(partitionStatus.Partition))
@@ -249,12 +249,14 @@ func (hc *Coordinator) handlePrometheusMetrics(writer http.ResponseWriter, reque
 				}
 				consumerGroupPartitionStatusCodeMetricFamily.Metric = append(consumerGroupPartitionStatusCodeMetricFamily.Metric, &consumerGroupPartitionStatusCodeMetric)
 
-				consumerGroupPartitionLatestOffsetMetricValue := float64(partitionStatus.End.Offset)
-				consumerGroupPartitionLatestOffsetMetric := dto.Metric{
-					Counter: &dto.Counter{ Value: &consumerGroupPartitionLatestOffsetMetricValue },
-					Label: consumerGroupPartitionLabels,
+				if partitionStatus.End != nil {
+					consumerGroupPartitionLatestOffsetMetricValue := float64(partitionStatus.End.Offset)
+					consumerGroupPartitionLatestOffsetMetric := dto.Metric{
+						Counter: &dto.Counter{Value: &consumerGroupPartitionLatestOffsetMetricValue},
+						Label:   consumerGroupPartitionLabels,
+					}
+					consumerGroupPartitionLatestOffsetMetricFamily.Metric = append(consumerGroupPartitionLatestOffsetMetricFamily.Metric, &consumerGroupPartitionLatestOffsetMetric)
 				}
-				consumerGroupPartitionLatestOffsetMetricFamily.Metric = append(consumerGroupPartitionLatestOffsetMetricFamily.Metric, &consumerGroupPartitionLatestOffsetMetric)
 
 			}
 		}
