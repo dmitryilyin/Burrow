@@ -41,3 +41,11 @@
 [[constraint]]
   name = "gopkg.in/gomail.v2"
   branch = "v2"
+
+[[constraint]]
+  name = "github.com/prometheus/client_model"
+  branch = "master"
+
+[[constraint]]
+  name = "github.com/prometheus/common"
+  branch = "master"
