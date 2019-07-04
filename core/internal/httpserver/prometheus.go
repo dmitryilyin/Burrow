@@ -11,22 +11,34 @@
 package httpserver
 
 import (
+	"compress/gzip"
 	"fmt"
 	"github.com/julienschmidt/httprouter"
 	"github.com/linkedin/Burrow/core/protocol"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 )
+
+type gzipResponseWriter struct {
+	io.Writer
+	http.ResponseWriter
+}
+
+func (w gzipResponseWriter) Write(b []byte) (int, error) {
+	return w.Writer.Write(b)
+}
 
 func (hc *Coordinator) handlePrometheusMetrics(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
 
 	// Metric Family declarations
-	
+
 	// Consumer Group
-	
+
 	consumerGroupTotalLagMetricFamilyName := "burrow_consumer_group_total_lag"
 	consumerGroupTotalLagMetricFamilyHelp := "The sum of all consumed partition current lag values for the group."
 	consumerGroupTotalLagMetricFamilyType := dto.MetricType_GAUGE
@@ -91,7 +103,7 @@ func (hc *Coordinator) handlePrometheusMetrics(writer http.ResponseWriter, reque
 		Help: &consumerGroupPartitionLatestOffsetMetricFamilyHelp,
 		Type: &consumerGroupPartitionLatestOffsetMetricFamilyType,
 	}
-	
+
 	// Topic Partition
 
 	topicPartitionOffsetMetricFamilyName := "burrow_topic_partition_offset"
@@ -172,29 +184,29 @@ func (hc *Coordinator) handlePrometheusMetrics(writer http.ResponseWriter, reque
 			consumerGroupStatusLabelValue := responseConsumerGroupStatus.Status.String()
 
 			consumerGroupLabels := []*dto.LabelPair{
-				{ Name: &hostLabelName, Value: &host },
-				{ Name: &clusterLabelName, Value: &clusterLabelValue },
-				{ Name: &consumerGroupLabelName, Value: &consumerGroupLabelValue },
-				{ Name: &consumerGroupStatusLabelName, Value: &consumerGroupStatusLabelValue },
+				{Name: &hostLabelName, Value: &host},
+				{Name: &clusterLabelName, Value: &clusterLabelValue},
+				{Name: &consumerGroupLabelName, Value: &consumerGroupLabelValue},
+				{Name: &consumerGroupStatusLabelName, Value: &consumerGroupStatusLabelValue},
 			}
 
 			consumerGroupTotalLagMetricValue := float64(responseConsumerGroupStatus.TotalLag)
 			consumerGroupTotalLagMetric := dto.Metric{
-				Gauge: &dto.Gauge{ Value: &consumerGroupTotalLagMetricValue },
+				Gauge: &dto.Gauge{Value: &consumerGroupTotalLagMetricValue},
 				Label: consumerGroupLabels,
 			}
 			consumerGroupTotalLagMetricFamily.Metric = append(consumerGroupTotalLagMetricFamily.Metric, &consumerGroupTotalLagMetric)
 
 			consumerGroupTotalPartitionsMetricValue := float64(responseConsumerGroupStatus.TotalPartitions)
 			consumerGroupTotalPartitionsMetric := dto.Metric{
-				Gauge: &dto.Gauge{ Value: &consumerGroupTotalPartitionsMetricValue },
-				Label: consumerGroupLabels,				
+				Gauge: &dto.Gauge{Value: &consumerGroupTotalPartitionsMetricValue},
+				Label: consumerGroupLabels,
 			}
 			consumerGroupTotalPartitionsMetricFamily.Metric = append(consumerGroupTotalPartitionsMetricFamily.Metric, &consumerGroupTotalPartitionsMetric)
 
-			consumerGroupStatusCodeMetricValue :=  float64(responseConsumerGroupStatus.Status)
+			consumerGroupStatusCodeMetricValue := float64(responseConsumerGroupStatus.Status)
 			consumerGroupStatusCodeMetric := dto.Metric{
-				Gauge: &dto.Gauge{ Value: &consumerGroupStatusCodeMetricValue },
+				Gauge: &dto.Gauge{Value: &consumerGroupStatusCodeMetricValue},
 				Label: consumerGroupLabels,
 			}
 			consumerGroupStatusCodeMetricFamily.Metric = append(consumerGroupStatusCodeMetricFamily.Metric, &consumerGroupStatusCodeMetric)
@@ -216,35 +228,35 @@ func (hc *Coordinator) handlePrometheusMetrics(writer http.ResponseWriter, reque
 				// if partitionStatus.Complete < 1.0 {
 				//	continue
 				// }
-				
+
 				topicLabelValue := partitionStatus.Topic
 				partitionLabelValue := strconv.Itoa(int(partitionStatus.Partition))
 				partitionStatusLabelValue := partitionStatus.Status.String()
 				ownerLabelValue := partitionStatus.Owner
 				clientIdLabelValue := partitionStatus.ClientID
-				
+
 				consumerGroupPartitionLabels := []*dto.LabelPair{
-					{ Name: &hostLabelName, Value: &host },
-					{ Name: &clusterLabelName, Value: &clusterLabelValue },
-					{ Name: &consumerGroupLabelName, Value: &consumerGroupLabelValue },
-					{ Name: &consumerGroupStatusLabelName, Value: &consumerGroupStatusLabelValue },
-					{ Name: &topicLabelName, Value: &topicLabelValue },
-					{ Name: &partitionLabelName, Value: &partitionLabelValue },
-					{ Name: &partitionStatusLabelName, Value: &partitionStatusLabelValue },
-					{ Name: &ownerLabelName, Value: &ownerLabelValue},
-					{ Name: &clientIdLabelName, Value: &clientIdLabelValue },
+					{Name: &hostLabelName, Value: &host},
+					{Name: &clusterLabelName, Value: &clusterLabelValue},
+					{Name: &consumerGroupLabelName, Value: &consumerGroupLabelValue},
+					{Name: &consumerGroupStatusLabelName, Value: &consumerGroupStatusLabelValue},
+					{Name: &topicLabelName, Value: &topicLabelValue},
+					{Name: &partitionLabelName, Value: &partitionLabelValue},
+					{Name: &partitionStatusLabelName, Value: &partitionStatusLabelValue},
+					{Name: &ownerLabelName, Value: &ownerLabelValue},
+					{Name: &clientIdLabelName, Value: &clientIdLabelValue},
 				}
 
 				consumerGroupPartitionCurrentLagMetricValue := float64(partitionStatus.CurrentLag)
 				consumerGroupPartitionCurrentLagMetric := dto.Metric{
-					Gauge: &dto.Gauge{ Value: &consumerGroupPartitionCurrentLagMetricValue },
+					Gauge: &dto.Gauge{Value: &consumerGroupPartitionCurrentLagMetricValue},
 					Label: consumerGroupPartitionLabels,
 				}
 				consumerGroupPartitionCurrentLagMetricFamily.Metric = append(consumerGroupPartitionCurrentLagMetricFamily.Metric, &consumerGroupPartitionCurrentLagMetric)
 
 				consumerGroupPartitionStatusCodeMetricValue := float64(partitionStatus.Status)
 				consumerGroupPartitionStatusCodeMetric := dto.Metric{
-					Gauge: &dto.Gauge{ Value: &consumerGroupPartitionStatusCodeMetricValue },
+					Gauge: &dto.Gauge{Value: &consumerGroupPartitionStatusCodeMetricValue},
 					Label: consumerGroupPartitionLabels,
 				}
 				consumerGroupPartitionStatusCodeMetricFamily.Metric = append(consumerGroupPartitionStatusCodeMetricFamily.Metric, &consumerGroupPartitionStatusCodeMetric)
@@ -290,16 +302,16 @@ func (hc *Coordinator) handlePrometheusMetrics(writer http.ResponseWriter, reque
 				partitionLabelValue := strconv.Itoa(partitionNumber)
 
 				topicPartitionLabels := []*dto.LabelPair{
-					{ Name: &hostLabelName, Value: &host },
-					{ Name: &clusterLabelName, Value: &clusterLabelValue },
-					{ Name: &topicLabelName, Value: &topicLabelValue },
-					{ Name: &partitionLabelName, Value: &partitionLabelValue },
+					{Name: &hostLabelName, Value: &host},
+					{Name: &clusterLabelName, Value: &clusterLabelValue},
+					{Name: &topicLabelName, Value: &topicLabelValue},
+					{Name: &partitionLabelName, Value: &partitionLabelValue},
 				}
 
 				topicPartitionOffsetMetricValue := float64(partitionOffset)
 				topicPartitionOffsetMetric := dto.Metric{
-					Counter: &dto.Counter{ Value: &topicPartitionOffsetMetricValue },
-					Label: topicPartitionLabels,
+					Counter: &dto.Counter{Value: &topicPartitionOffsetMetricValue},
+					Label:   topicPartitionLabels,
 				}
 				topicPartitionOffsetMetricFamily.Metric = append(topicPartitionOffsetMetricFamily.Metric, &topicPartitionOffsetMetric)
 
@@ -311,13 +323,21 @@ func (hc *Coordinator) handlePrometheusMetrics(writer http.ResponseWriter, reque
 
 	// Output
 
+	var encoder expfmt.Encoder
+
 	contentType := expfmt.Negotiate(request.Header)
+	writer.Header().Set("Content-Type", string(contentType))
 
-	header := writer.Header()
-	header.Set("Content-Type", string(contentType))
-	header.Set("Access-Control-Allow-Origin", "*")
+	acceptEncoding := request.Header.Get("Accept-Encoding")
 
-	encoder := expfmt.NewEncoder(writer, contentType)
+	if strings.Contains(acceptEncoding, "gzip") {
+		writer.Header().Set("Content-Encoding", "gzip")
+		gzWriter := gzip.NewWriter(writer)
+		defer gzWriter.Close()
+		encoder = expfmt.NewEncoder(gzipResponseWriter{Writer: gzWriter, ResponseWriter: writer}, contentType)
+	} else {
+		encoder = expfmt.NewEncoder(writer, contentType)
+	}
 
 	for _, metricFamily := range metricFamilies {
 		err := encoder.Encode(metricFamily)
