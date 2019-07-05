@@ -33,6 +33,7 @@ import (
 
 	"github.com/linkedin/Burrow/core/internal/helpers"
 	"github.com/linkedin/Burrow/core/protocol"
+	"github.com/linkedin/Burrow/core/internal/metric"
 )
 
 // Coordinator runs the HTTP interface for Burrow, managing all configured listeners.
@@ -133,8 +134,11 @@ func (hc *Coordinator) Configure() {
 	// Prometheus metrics
 	viper.SetDefault("metrics.prometheus.enabled", false)
 	if viper.GetBool("metrics.prometheus.enabled") {
-		hc.prometheusMetricsDefaults()
-		hc.router.GET("/metrics", hc.prometheusHandleMetrics)
+		pm := metric.PrometheusMetric{
+			App: hc.App,
+		}
+		pm.SetDefaults()
+		hc.router.GET("/metrics", pm.HandleRequest)
 	}
 
 	// All valid paths go here

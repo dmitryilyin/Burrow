@@ -8,7 +8,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  */
 
-package httpserver
+package metric
 
 import (
 	"compress/gzip"
@@ -25,6 +25,10 @@ import (
 	"strings"
 )
 
+type PrometheusMetric struct {
+	App *protocol.ApplicationContext
+}
+
 type gzipResponseWriter struct {
 	io.Writer
 	http.ResponseWriter
@@ -34,7 +38,7 @@ func (w gzipResponseWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
-func (hc *Coordinator) prometheusMetricsDefaults() {
+func (pm *PrometheusMetric) SetDefaults() {
 	viper.SetDefault("metrics.prometheus.metric-consumer-enabled", true)
 	viper.SetDefault("metrics.prometheus.metric-consumer-total-lag", "burrow_consumer_group_total_lag")
 	viper.SetDefault("metrics.prometheus.metric-consumer-partitions", "burrow_consumer_group_total_partitions")
@@ -58,7 +62,7 @@ func (hc *Coordinator) prometheusMetricsDefaults() {
 	viper.SetDefault("metrics.prometheus.exclude-consumers", "")
 }
 
-func (hc *Coordinator) prometheusHandleMetrics(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
+func (pm *PrometheusMetric) HandleRequest(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
 	metricFamilies := make([]*dto.MetricFamily, 8)
 
 	metricConsumerEnabled := viper.GetBool("metrics.prometheus.metric-consumer-enabled")
@@ -69,7 +73,7 @@ func (hc *Coordinator) prometheusHandleMetrics(writer http.ResponseWriter, reque
 		RequestType: protocol.StorageFetchClusters,
 		Reply:       make(chan interface{}),
 	}
-	hc.App.StorageChannel <- requestFetchClusters
+	pm.App.StorageChannel <- requestFetchClusters
 	responseFetchClusters := <-requestFetchClusters.Reply
 
 	host, _ := os.Hostname()
@@ -77,20 +81,20 @@ func (hc *Coordinator) prometheusHandleMetrics(writer http.ResponseWriter, reque
 	for _, cluster := range responseFetchClusters.([]string) {
 
 		if metricConsumerEnabled || metricPartitionEnabled {
-			hc.prometheusCollectConsumerMetrics(metricFamilies, metricConsumerEnabled, metricPartitionEnabled, host, cluster)
+			pm.prometheusCollectConsumerMetrics(metricFamilies, metricConsumerEnabled, metricPartitionEnabled, host, cluster)
 		}
 
 		if metricTopicEnabled {
-			hc.prometheusCollectTopicMetrics(metricFamilies, host, cluster)
+			pm.prometheusCollectTopicMetrics(metricFamilies, host, cluster)
 		}
 
 	}
 
-	hc.prometheusMetricsOutput(writer, request, metricFamilies)
+	pm.prometheusMetricsOutput(writer, request, metricFamilies)
 
 }
 
-func (hc *Coordinator) prometheusCollectConsumerMetrics(metricFamilies []*dto.MetricFamily, metricConsumerEnabled bool, metricPartitionEnabled bool, host string, cluster string) {
+func (pm *PrometheusMetric) prometheusCollectConsumerMetrics(metricFamilies []*dto.MetricFamily, metricConsumerEnabled bool, metricPartitionEnabled bool, host string, cluster string) {
 
 	hostLabelName := "host"
 	clusterLabelName := "cluster"
@@ -142,7 +146,7 @@ func (hc *Coordinator) prometheusCollectConsumerMetrics(metricFamilies []*dto.Me
 		Cluster:     cluster,
 		Reply:       make(chan interface{}),
 	}
-	hc.App.StorageChannel <- requestFetchConsumers
+	pm.App.StorageChannel <- requestFetchConsumers
 	responseFetchConsumers := <-requestFetchConsumers.Reply
 
 	for _, consumerGroup := range responseFetchConsumers.([]string) {
@@ -154,7 +158,7 @@ func (hc *Coordinator) prometheusCollectConsumerMetrics(metricFamilies []*dto.Me
 			ShowAll: true,
 			Reply:   make(chan *protocol.ConsumerGroupStatus),
 		}
-		hc.App.EvaluatorChannel <- requestConsumerGroupStatus
+		pm.App.EvaluatorChannel <- requestConsumerGroupStatus
 		responseConsumerGroupStatus := <-requestConsumerGroupStatus.Reply
 
 		if viper.GetBool("metrics.prometheus.only-complete-consumers") {
@@ -211,7 +215,7 @@ func (hc *Coordinator) prometheusCollectConsumerMetrics(metricFamilies []*dto.Me
 		}
 
 		if metricPartitionEnabled {
-			hc.prometheusCollectPartitionMetrics(
+			pm.prometheusCollectPartitionMetrics(
 				metricFamilies,
 				consumerGroup,
 				responseConsumerGroupStatus,
@@ -224,7 +228,7 @@ func (hc *Coordinator) prometheusCollectConsumerMetrics(metricFamilies []*dto.Me
 
 }
 
-func (hc *Coordinator) prometheusCollectPartitionMetrics(metricFamilies []*dto.MetricFamily, consumerGroup string, responseConsumerGroupStatus *protocol.ConsumerGroupStatus, host string, cluster string) {
+func (pm *PrometheusMetric) prometheusCollectPartitionMetrics(metricFamilies []*dto.MetricFamily, consumerGroup string, responseConsumerGroupStatus *protocol.ConsumerGroupStatus, host string, cluster string) {
 
 	hostLabelName := "host"
 	clusterLabelName := "cluster"
@@ -325,7 +329,7 @@ func (hc *Coordinator) prometheusCollectPartitionMetrics(metricFamilies []*dto.M
 	}
 }
 
-func (hc *Coordinator) prometheusCollectTopicMetrics(metricFamilies []*dto.MetricFamily, host string, cluster string) {
+func (pm *PrometheusMetric) prometheusCollectTopicMetrics(metricFamilies []*dto.MetricFamily, host string, cluster string) {
 
 	hostLabelName := "host"
 	clusterLabelName := "cluster"
@@ -347,7 +351,7 @@ func (hc *Coordinator) prometheusCollectTopicMetrics(metricFamilies []*dto.Metri
 		Cluster:     cluster,
 		Reply:       make(chan interface{}),
 	}
-	hc.App.StorageChannel <- requestFetchTopics
+	pm.App.StorageChannel <- requestFetchTopics
 	responseFetchTopics := <-requestFetchTopics.Reply
 
 	for _, topic := range responseFetchTopics.([]string) {
@@ -358,7 +362,7 @@ func (hc *Coordinator) prometheusCollectTopicMetrics(metricFamilies []*dto.Metri
 			Topic:       topic,
 			Reply:       make(chan interface{}),
 		}
-		hc.App.StorageChannel <- requestTopicDetail
+		pm.App.StorageChannel <- requestTopicDetail
 		responseTopicDetail := <-requestTopicDetail.Reply
 
 		for partitionNumber, partitionOffset := range responseTopicDetail.([]int64) {
@@ -388,7 +392,7 @@ func (hc *Coordinator) prometheusCollectTopicMetrics(metricFamilies []*dto.Metri
 
 }
 
-func (hc *Coordinator) prometheusMetricsOutput(writer http.ResponseWriter, request *http.Request, metricFamilies []*dto.MetricFamily) {
+func (pm *PrometheusMetric) prometheusMetricsOutput(writer http.ResponseWriter, request *http.Request, metricFamilies []*dto.MetricFamily) {
 	var encoder expfmt.Encoder
 
 	contentType := expfmt.Negotiate(request.Header)
