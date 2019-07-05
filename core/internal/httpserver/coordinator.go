@@ -131,7 +131,11 @@ func (hc *Coordinator) Configure() {
 	hc.router.GET("/burrow/admin", hc.handleAdmin)
 
 	// Prometheus metrics
-	hc.router.GET("/metrics", hc.handlePrometheusMetrics)
+	viper.SetDefault("metrics.prometheus.enabled", false)
+	if viper.GetBool("metrics.prometheus.enabled") {
+		hc.prometheusMetricsDefaults()
+		hc.router.GET("/metrics", hc.prometheusHandleMetrics)
+	}
 
 	// All valid paths go here
 	hc.router.GET("/v3/kafka", hc.handleClusterList)

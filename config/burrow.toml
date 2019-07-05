@@ -67,3 +67,46 @@ template-close="conf/default-http-delete.tmpl"
 method-close="DELETE"
 send-close=true
 threshold=1
+
+[metrics.prometheus]
+# Enable Prometheus metrics endpoint
+enabled = false
+
+# Enable the collection of the generic consumer group related metrics
+metric-consumer-enabled = true
+# Set the metric names for the consumer group measurements
+metric-consumer-total-lag = "burrow_consumer_group_total_lag"
+metric-consumer-partitions = "burrow_consumer_group_total_partitions"
+metric-consumer-status = "burrow_consumer_group_status_code"
+metric-consumer-max-lag = "burrow_consumer_group_max_lag"
+
+# Enable the collection of the per-partition consumer group metrics
+metric-partition-enabled = true
+# Set the metric names for the per-partition consumer measurements
+metric-partition-current-lag = "burrow_consumer_group_partition_current_lag"
+metric-partition-status = "burrow_consumer_group_partition_status_code"
+metric-partition-offset = "burrow_consumer_group_partition_latest_offset"
+
+# Enable the collection of topic related metrics
+metric-topic-enabled = true
+# Set the metric names for the topic measurements
+metric-topic-offset = "burrow_topic_partition_offset"
+
+# Include only topics matching this regular expression
+# Empty value means to inclusion of all topics
+include-topics = ''
+# Exclude topics matching this regular expression
+# Empty value means no topics are excluded
+exclude-topics = ''
+
+# Include only consumer groups matching this regular expression
+# Empty value means to inclusion of all consumer groups
+include-consumers = ''
+# Exclude consumer groups matching this regular expression
+# Empty value means no consumer groups are excluded
+exclude-consumers = ''
+
+# Skip consumer groups which completeness is less then 100%
+only-complete-consumers = false
+# Skip partitions which completeness is less then 100%
+only-complete-partitions = false
